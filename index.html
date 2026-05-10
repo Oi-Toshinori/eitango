@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="UTF-8">
+<title>英単語テスト</title>
+
+<style>
+
+body{
+  font-family:sans-serif;
+  text-align:center;
+}
+
+canvas{
+  border:1px solid black;
+  touch-action:none;
+}
+
+button{
+  margin:5px;
+  padding:10px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>英単語テスト</h1>
+
+<p id="testNumber"></p>
+
+<h2 id="question"></h2>
+
+<canvas id="canvas" width="400" height="200"></canvas>
+
+<br><br>
+
+<button onclick="clearCanvas()">消す</button>
+<button onclick="checkAnswer()">判定</button>
+<button onclick="skipQuestion()">次の問題へ</button>
+<button onclick="prevTest()">前のテスト</button>
+<button onclick="nextTestSet()">次のテスト</button>
+
+<p id="result"></p>
+
+<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<script>
+
+let words = [];
+let currentTest = 1;
+let currentWord;
+let remainingWords = [];
+let correctCount = 0;
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let drawing = false;
+
+ctx.lineWidth = 8;
+ctx.lineCap = "round";
+ctx.strokeStyle = "black";
+
+canvas.addEventListener("pointerdown", start);
+canvas.addEventListener("pointermove", draw);
+canvas.addEventListener("pointerup", end);
+
+function start(e){
+  drawing = true;
+  ctx.beginPath();
+  ctx.moveTo(e.offsetX, e.offsetY);
+}
+
+function draw(e){
+  if(!drawing) return;
+  ctx.lineTo(e.offsetX, e.offsetY);
+  ctx.stroke();
+}
+
+function end(){
+  drawing = false;
+}
+
+function clearCanvas(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+/* =========================
+   音（安定版）
+========================= */
+
+function playCorrectSound(){
+  const audio = new Audio("correct.mp3");
+  audio.currentTime = 0;
+  audio.play().catch(()=>{});
+}
+
+function playWrongSound(){
+  const audio = new Audio("wrong.mp3");
+  audio.currentTime = 0;
+  audio.play().catch(()=>{});
+}
+
+/* ========================= */
+
+async function loadWords(){
+
+  const response = await fetch("words.csv");
+  const text = await response.text();
+
+  const lines = text.trim().split("\n");
+
+  words = lines.map(line => {
+    const parts = line.split(",");
+    return {
+      en: parts[0].trim(),
+      ja: parts[1].trim()
+    };
+  });
+
+  correctCount = 0;
+  resetRemainingWords();
+  nextQuestion();
+}
+
+function getCurrentTestWords(){
+  const start = (currentTest - 1) * 5;
+  const end = start + 5;
+  return words.slice(start,end);
+}
+
+function resetRemainingWords(){
+  remainingWords = [...getCurrentTestWords()];
+}
+
+function nextQuestion(){
+
+  if(remainingWords.length === 0){
+    resetRemainingWords();
+  }
+
+  const index = Math.floor(Math.random() * remainingWords.length);
+
+  currentWord = remainingWords[index];
+  remainingWords.splice(index,1);
+
+  document.getElementById("question").textContent = currentWord.ja;
+  document.getElementById("testNumber").textContent = "第" + currentTest + "回";
+}
+
+/* スキップ */
+function skipQuestion(){
+  clearCanvas();
+  nextQuestion();
+}
+
+/* 次テスト */
+function nextTestSet(){
+
+  const maxTest = Math.ceil(words.length / 5);
+
+  if(currentTest < maxTest){
+    currentTest++;
+    correctCount = 0;
+    resetRemainingWords();
+    nextQuestion();
+  }
+}
+
+/* 前テスト */
+function prevTest(){
+
+  if(currentTest > 1){
+    currentTest--;
+    correctCount = 0;
+    resetRemainingWords();
+    nextQuestion();
+  }
+}
+
+/* =========================
+   OCR判定（強化版）
+========================= */
+
+async function checkAnswer(){
+
+  const result = document.getElementById("result");
+  result.textContent = "判定中...";
+
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = canvas.width;
+  tempCanvas.height = canvas.height;
+
+  const tempCtx = tempCanvas.getContext("2d");
+
+  /* 白背景 */
+  tempCtx.fillStyle = "white";
+  tempCtx.fillRect(0,0,tempCanvas.width,tempCanvas.height);
+
+  /* 手書き転送 */
+  tempCtx.drawImage(canvas,0,0);
+
+  const data = tempCanvas.toDataURL();
+
+  const ocr = await Tesseract.recognize(data,"eng");
+
+  /* =========================
+     OCR精度強化処理（④）
+  ========================= */
+
+  let text = ocr.data.text
+    .toLowerCase()
+    .replace(/\n/g,"")       // 改行削除（2行対応）
+    .replace(/\s+/g,"")      // スペース削除
+    .replace(/[^a-z]/g,"");   // 英字以外削除
+
+  let answer = currentWord.en
+    .toLowerCase()
+    .replace(/\s+/g,"")
+    .replace(/[^a-z]/g,"");
+
+  console.log("OCR:", text);
+  console.log("ANS:", answer);
+
+  /* =========================
+     判定
+  ========================= */
+
+  if(text === answer){
+
+    result.textContent = "正解！ " + text;
+
+    playCorrectSound();
+
+    correctCount++;
+
+    if(correctCount >= 5){
+      document.getElementById("question").textContent = "Good!!";
+      document.getElementById("result").textContent = "";
+      clearCanvas();
+      return;
+    }
+
+    clearCanvas();
+    nextQuestion();
+
+  }else{
+
+    result.textContent = "不正解：" + text;
+
+    playWrongSound();
+  }
+}
+
+/* start */
+loadWords();
+
+</script>
+
+</body>
+</html>
