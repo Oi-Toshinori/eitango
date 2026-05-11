@@ -96,7 +96,8 @@ function clearCanvas(){
 ========================= */
 
 const correctAudio = new Audio("correct.mp3");
-const wrongAudio = new Audio("wrong.mp3");
+const wrongAudio = new Audio("./wrong.mp3");
+wrongAudio.load();
 
 /* 音声解放 */
 async function unlockAudio(){
@@ -155,7 +156,7 @@ async function playWrongSound(){
     wrongAudio.pause();
 
     wrongAudio.currentTime = 0;
-
+console.log("wrong sound start");
     await wrongAudio.play();
 
   }catch(e){
