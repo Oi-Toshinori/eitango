@@ -53,109 +53,39 @@ button{
 <script>
 
 /* =========================
-   iPad対応音声
+   iPad音声
 ========================= */
 
 let audioUnlocked = false;
 
-/* ./ を付ける */
+function unlockAudio(){
 
-const correctAudio = new Audio("./correct.mp3");
-const wrongAudio = new Audio("./wrong.mp3");
+  audioUnlocked = true;
 
-/* preload */
-
-correctAudio.preload = "auto";
-wrongAudio.preload = "auto";
-
-/* 音声開始 */
-
-async function unlockAudio(){
-
-  try{
-
-    /* iPad対策 */
-
-    correctAudio.muted = true;
-
-    const p1 = correctAudio.play();
-
-    if(p1 !== undefined){
-      await p1;
-    }
-
-    correctAudio.pause();
-
-    correctAudio.currentTime = 0;
-
-    correctAudio.muted = false;
-
-    wrongAudio.muted = true;
-
-    const p2 = wrongAudio.play();
-
-    if(p2 !== undefined){
-      await p2;
-    }
-
-    wrongAudio.pause();
-
-    wrongAudio.currentTime = 0;
-
-    wrongAudio.muted = false;
-
-    audioUnlocked = true;
-
-    document.getElementById("result").textContent =
-      "音声ON";
-
-  }catch(e){
-
-    console.log(e);
-
-    document.getElementById("result").textContent =
-      "音声開始失敗";
-  }
+  document.getElementById("result").textContent =
+    "音声ON";
 }
 
 /* 正解音 */
 
-async function playCorrectSound(){
+function playCorrectSound(){
 
   if(!audioUnlocked) return;
 
-  try{
+  const audio = new Audio("./correct.mp3");
 
-    correctAudio.pause();
-
-    correctAudio.currentTime = 0;
-
-    await correctAudio.play();
-
-  }catch(e){
-
-    console.log(e);
-  }
+  audio.play().catch(e => console.log(e));
 }
 
 /* 不正解音 */
 
-async function playWrongSound(){
+function playWrongSound(){
 
   if(!audioUnlocked) return;
 
-  try{
+  const audio = new Audio("./wrong.mp3");
 
-    wrongAudio.pause();
-
-    wrongAudio.currentTime = 0;
-
-    await wrongAudio.play();
-
-  }catch(e){
-
-    console.log(e);
-  }
+  audio.play().catch(e => console.log(e));
 }
 
 /* =========================
@@ -223,11 +153,6 @@ async function loadWords(){
 
     const response = await fetch("./words.csv");
 
-    if(!response.ok){
-
-      throw new Error("CSV読み込み失敗");
-    }
-
     const text = await response.text();
 
     const lines = text.trim().split("\n");
@@ -258,7 +183,7 @@ async function loadWords(){
 }
 
 /* =========================
-   テスト管理
+   テスト
 ========================= */
 
 function getCurrentTestWords(){
@@ -388,7 +313,7 @@ async function checkAnswer(){
     result.textContent =
       "正解！ " + text;
 
-    await playCorrectSound();
+    playCorrectSound();
 
     correctCount++;
 
@@ -413,7 +338,7 @@ async function checkAnswer(){
     result.textContent =
       "不正解：" + text;
 
-    await playWrongSound();
+    playWrongSound();
   }
 }
 
