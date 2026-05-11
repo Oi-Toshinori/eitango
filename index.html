@@ -38,8 +38,6 @@ button{
 
 <br><br>
 
-<button onclick="unlockAudio()">音声開始</button>
-
 <button onclick="clearCanvas()">消す</button>
 <button onclick="checkAnswer()">判定</button>
 <button onclick="skipQuestion()">次の問題へ</button>
@@ -51,42 +49,6 @@ button{
 <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
-
-/* =========================
-   iPad音声
-========================= */
-
-let audioUnlocked = false;
-
-function unlockAudio(){
-
-  audioUnlocked = true;
-
-  document.getElementById("result").textContent =
-    "音声ON";
-}
-
-/* 正解音 */
-
-function playCorrectSound(){
-
-  if(!audioUnlocked) return;
-
-  const audio = new Audio("./correct.mp3");
-
-  audio.play().catch(e => console.log(e));
-}
-
-/* 不正解音 */
-
-function playWrongSound(){
-
-  if(!audioUnlocked) return;
-
-  const audio = new Audio("./wrong.mp3");
-
-  audio.play().catch(e => console.log(e));
-}
 
 /* =========================
    単語
@@ -144,7 +106,7 @@ function clearCanvas(){
 }
 
 /* =========================
-   words.csv
+   words.csv 読み込み
 ========================= */
 
 async function loadWords(){
@@ -152,6 +114,11 @@ async function loadWords(){
   try{
 
     const response = await fetch("./words.csv");
+
+    if(!response.ok){
+
+      throw new Error("CSV読み込み失敗");
+    }
 
     const text = await response.text();
 
@@ -183,7 +150,7 @@ async function loadWords(){
 }
 
 /* =========================
-   テスト
+   テスト管理
 ========================= */
 
 function getCurrentTestWords(){
@@ -259,7 +226,7 @@ function prevTest(){
 }
 
 /* =========================
-   OCR
+   OCR判定
 ========================= */
 
 async function checkAnswer(){
@@ -268,6 +235,19 @@ async function checkAnswer(){
     document.getElementById("result");
 
   result.textContent = "判定中...";
+
+  /* =========================
+     iPad対策
+     先にAudio生成
+  ========================= */
+
+  let correctAudio =
+    new Audio("./correct.mp3");
+
+  let wrongAudio =
+    new Audio("./wrong.mp3");
+
+  /* ========================= */
 
   const tempCanvas =
     document.createElement("canvas");
@@ -313,7 +293,8 @@ async function checkAnswer(){
     result.textContent =
       "正解！ " + text;
 
-    playCorrectSound();
+    correctAudio.play()
+      .catch(e=>console.log(e));
 
     correctCount++;
 
@@ -338,7 +319,8 @@ async function checkAnswer(){
     result.textContent =
       "不正解：" + text;
 
-    playWrongSound();
+    wrongAudio.play()
+      .catch(e=>console.log(e));
   }
 }
 
