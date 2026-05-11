@@ -95,62 +95,89 @@ function clearCanvas(){
    iPad対応音声
 ========================= */
 
-const correctAudio = new Audio("correct.mp3");
-const wrongAudio = new Audio("./wrong.mp3");
-wrongAudio.load();
+/* =========================
+   iPad完全対応音声
+========================= */
 
-/* 音声解放 */
+let audioUnlocked = false;
+
+const AudioContextClass =
+  window.AudioContext || window.webkitAudioContext;
+
+const audioContext = new AudioContextClass();
+
+let correctBuffer = null;
+let wrongBuffer = null;
+
+/* mp3読み込み */
+
+async function loadSound(url){
+
+  const response = await fetch(url);
+
+  const arrayBuffer = await response.arrayBuffer();
+
+  return await audioContext.decodeAudioData(arrayBuffer);
+}
+
+/* 音声開始 */
+
 async function unlockAudio(){
 
   try{
 
-    correctAudio.volume = 0;
+    await audioContext.resume();
 
-    await correctAudio.play();
+    if(!correctBuffer){
+      correctBuffer = await loadSound("correct.mp3");
+    }
 
-    correctAudio.pause();
-    correctAudio.currentTime = 0;
+    if(!wrongBuffer){
+      wrongBuffer = await loadSound("wrong.mp3");
+    }
 
-    wrongAudio.volume = 0;
+    audioUnlocked = true;
 
-    await wrongAudio.play();
-
-    wrongAudio.pause();
-    wrongAudio.currentTime = 0;
-
-    correctAudio.volume = 1;
-    wrongAudio.volume = 1;
-
-    document.getElementById("result").textContent = "音声ON";
+    document.getElementById("result").textContent =
+      "音声ON";
 
   }catch(e){
 
     console.log(e);
 
-    document.getElementById("result").textContent = "音声開始失敗";
+    document.getElementById("result").textContent =
+      "音声開始失敗";
   }
+}
+
+/* 再生共通 */
+
+function playBuffer(buffer){
+
+  if(!audioUnlocked) return;
+
+  const source = audioContext.createBufferSource();
+
+  source.buffer = buffer;
+
+  source.connect(audioContext.destination);
+
+  source.start(0);
 }
 
 /* 正解音 */
-async function playCorrectSound(){
 
-  try{
+function playCorrectSound(){
 
-    correctAudio.pause();
-
-    correctAudio.currentTime = 0;
-
-    await correctAudio.play();
-
-  }catch(e){
-
-    console.log(e);
-  }
+  playBuffer(correctBuffer);
 }
 
 /* 不正解音 */
-async function playWrongSound(){
 
+function playWrongSound(){
+
+  playBuffer(wrongBuffer);
+}
   try{
 
     wrongAudio.pause();
