@@ -1,8 +1,82 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><title>英単語テスト</title><style>body{  font-family:sans-serif;  text-align:center;}canvas{  border:1px solid black;  touch-action:none;}button{  margin:5px;  padding:10px;}</style></head><body><h1>英単語テスト</h1><p id="testNumber"></p><h2 id="question">読み込み中...</h2><canvas id="canvas" width="400" height="200"></canvas><br><br><button onclick="unlockAudio()">音声開始</button><button onclick="clearCanvas()">消す</button><button onclick="checkAnswer()">判定</button><button onclick="skipQuestion()">次の問題へ</button><button onclick="prevTest()">前のテスト</button><button onclick="nextTestSet()">次のテスト</button><p id="result"></p><script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script><script>/* =========================   音声========================= */let audioUnlocked = false;const correctAudio = new Audio("correct.mp3");const wrongAudio = new Audio("wrong.mp3");async function unlockAudio(){
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="UTF-8">
+<title>英単語テスト</title>
+
+<style>
+
+body{
+  font-family:sans-serif;
+  text-align:center;
+}
+
+canvas{
+  border:1px solid black;
+  touch-action:none;
+}
+
+button{
+  margin:5px;
+  padding:10px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>英単語テスト</h1>
+
+<p id="testNumber"></p>
+
+<h2 id="question">読み込み中...</h2>
+
+<canvas id="canvas" width="400" height="200"></canvas>
+
+<br><br>
+
+<button onclick="unlockAudio()">音声開始</button>
+
+<button onclick="clearCanvas()">消す</button>
+<button onclick="checkAnswer()">判定</button>
+<button onclick="skipQuestion()">次の問題へ</button>
+<button onclick="prevTest()">前のテスト</button>
+<button onclick="nextTestSet()">次のテスト</button>
+
+<p id="result"></p>
+
+<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<script>
+
+/* =========================
+   iPad対応音声
+========================= */
+
+let audioUnlocked = false;
+
+/* ./ を付ける */
+
+const correctAudio = new Audio("./correct.mp3");
+const wrongAudio = new Audio("./wrong.mp3");
+
+/* preload */
+
+correctAudio.preload = "auto";
+wrongAudio.preload = "auto";
+
+/* 音声開始 */
+
+async function unlockAudio(){
 
   try{
 
-    correctAudio.currentTime = 0;
+    /* iPad対策 */
+
+    correctAudio.muted = true;
 
     const p1 = correctAudio.play();
 
@@ -14,7 +88,9 @@
 
     correctAudio.currentTime = 0;
 
-    wrongAudio.currentTime = 0;
+    correctAudio.muted = false;
+
+    wrongAudio.muted = true;
 
     const p2 = wrongAudio.play();
 
@@ -25,6 +101,8 @@
     wrongAudio.pause();
 
     wrongAudio.currentTime = 0;
+
+    wrongAudio.muted = false;
 
     audioUnlocked = true;
 
@@ -39,4 +117,311 @@
       "音声開始失敗";
   }
 }
-  async function playCorrectSound(){  if(!audioUnlocked) return;  try{    correctAudio.pause();    correctAudio.currentTime = 0;    await correctAudio.play();  }catch(e){    console.log(e);  }}async function playWrongSound(){  if(!audioUnlocked) return;  try{    wrongAudio.pause();    wrongAudio.currentTime = 0;    await wrongAudio.play();  }catch(e){    console.log(e);  }}/* =========================   単語========================= */let words = [];let currentTest = 1;let currentWord;let remainingWords = [];let correctCount = 0;/* =========================   Canvas========================= */const canvas = document.getElementById("canvas");const ctx = canvas.getContext("2d");let drawing = false;ctx.lineWidth = 8;ctx.lineCap = "round";ctx.strokeStyle = "black";canvas.addEventListener("pointerdown", start);canvas.addEventListener("pointermove", draw);canvas.addEventListener("pointerup", end);function start(e){  drawing = true;  ctx.beginPath();  ctx.moveTo(e.offsetX, e.offsetY);}function draw(e){  if(!drawing) return;  ctx.lineTo(e.offsetX, e.offsetY);  ctx.stroke();}function end(){  drawing = false;}function clearCanvas(){  ctx.clearRect(0,0,canvas.width,canvas.height);}/* =========================   words.csv 読み込み========================= */async function loadWords(){  try{    const response = await fetch("./words.csv");    if(!response.ok){      throw new Error("CSV読み込み失敗");    }    const text = await response.text();    const lines = text.trim().split("\n");    words = lines.map(line => {      const parts = line.split(",");      return {        en: parts[0].trim(),        ja: parts[1].trim()      };    });    correctCount = 0;    resetRemainingWords();    nextQuestion();  }catch(e){    console.log(e);    document.getElementById("question").textContent =      "words.csv 読み込み失敗";  }}/* =========================   テスト管理========================= */function getCurrentTestWords(){  const start = (currentTest - 1) * 5;  const end = start + 5;  return words.slice(start,end);}function resetRemainingWords(){  remainingWords = [...getCurrentTestWords()];}function nextQuestion(){  if(remainingWords.length === 0){    resetRemainingWords();  }  const index =    Math.floor(Math.random() * remainingWords.length);  currentWord = remainingWords[index];  remainingWords.splice(index,1);  document.getElementById("question").textContent =    currentWord.ja;  document.getElementById("testNumber").textContent =    "第" + currentTest + "回";}function skipQuestion(){  clearCanvas();  nextQuestion();}function nextTestSet(){  const maxTest = Math.ceil(words.length / 5);  if(currentTest < maxTest){    currentTest++;    correctCount = 0;    resetRemainingWords();    nextQuestion();  }}function prevTest(){  if(currentTest > 1){    currentTest--;    correctCount = 0;    resetRemainingWords();    nextQuestion();  }}/* =========================   OCR判定========================= */async function checkAnswer(){  const result =    document.getElementById("result");  result.textContent = "判定中...";  const tempCanvas =    document.createElement("canvas");  tempCanvas.width = canvas.width;  tempCanvas.height = canvas.height;  const tempCtx =    tempCanvas.getContext("2d");  tempCtx.fillStyle = "white";  tempCtx.fillRect(    0,    0,    tempCanvas.width,    tempCanvas.height  );  tempCtx.drawImage(canvas,0,0);  const data = tempCanvas.toDataURL();  const ocr =    await Tesseract.recognize(data,"eng");  let text = ocr.data.text    .toLowerCase()    .replace(/\n/g,"")    .replace(/\s+/g,"")    .replace(/[^a-z]/g,"");  let answer = currentWord.en    .toLowerCase()    .replace(/\s+/g,"")    .replace(/[^a-z]/g,"");  console.log("OCR:", text);  console.log("ANS:", answer);  if(text === answer){    result.textContent =      "正解！ " + text;    await playCorrectSound();    correctCount++;    if(correctCount >= 5){      document.getElementById("question").textContent =        "Good!!";      document.getElementById("result").textContent = "";      clearCanvas();      return;    }    clearCanvas();    nextQuestion();  }else{    result.textContent =      "不正解：" + text;    await playWrongSound();  }}/* start */loadWords();</script></body></html>
+
+/* 正解音 */
+
+async function playCorrectSound(){
+
+  if(!audioUnlocked) return;
+
+  try{
+
+    correctAudio.pause();
+
+    correctAudio.currentTime = 0;
+
+    await correctAudio.play();
+
+  }catch(e){
+
+    console.log(e);
+  }
+}
+
+/* 不正解音 */
+
+async function playWrongSound(){
+
+  if(!audioUnlocked) return;
+
+  try{
+
+    wrongAudio.pause();
+
+    wrongAudio.currentTime = 0;
+
+    await wrongAudio.play();
+
+  }catch(e){
+
+    console.log(e);
+  }
+}
+
+/* =========================
+   単語
+========================= */
+
+let words = [];
+let currentTest = 1;
+let currentWord;
+let remainingWords = [];
+let correctCount = 0;
+
+/* =========================
+   Canvas
+========================= */
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let drawing = false;
+
+ctx.lineWidth = 8;
+ctx.lineCap = "round";
+ctx.strokeStyle = "black";
+
+canvas.addEventListener("pointerdown", start);
+canvas.addEventListener("pointermove", draw);
+canvas.addEventListener("pointerup", end);
+
+function start(e){
+
+  drawing = true;
+
+  ctx.beginPath();
+
+  ctx.moveTo(e.offsetX, e.offsetY);
+}
+
+function draw(e){
+
+  if(!drawing) return;
+
+  ctx.lineTo(e.offsetX, e.offsetY);
+
+  ctx.stroke();
+}
+
+function end(){
+
+  drawing = false;
+}
+
+function clearCanvas(){
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+/* =========================
+   words.csv
+========================= */
+
+async function loadWords(){
+
+  try{
+
+    const response = await fetch("./words.csv");
+
+    if(!response.ok){
+
+      throw new Error("CSV読み込み失敗");
+    }
+
+    const text = await response.text();
+
+    const lines = text.trim().split("\n");
+
+    words = lines.map(line => {
+
+      const parts = line.split(",");
+
+      return {
+        en: parts[0].trim(),
+        ja: parts[1].trim()
+      };
+    });
+
+    correctCount = 0;
+
+    resetRemainingWords();
+
+    nextQuestion();
+
+  }catch(e){
+
+    console.log(e);
+
+    document.getElementById("question").textContent =
+      "words.csv 読み込み失敗";
+  }
+}
+
+/* =========================
+   テスト管理
+========================= */
+
+function getCurrentTestWords(){
+
+  const start = (currentTest - 1) * 5;
+
+  const end = start + 5;
+
+  return words.slice(start,end);
+}
+
+function resetRemainingWords(){
+
+  remainingWords = [...getCurrentTestWords()];
+}
+
+function nextQuestion(){
+
+  if(remainingWords.length === 0){
+
+    resetRemainingWords();
+  }
+
+  const index =
+    Math.floor(Math.random() * remainingWords.length);
+
+  currentWord = remainingWords[index];
+
+  remainingWords.splice(index,1);
+
+  document.getElementById("question").textContent =
+    currentWord.ja;
+
+  document.getElementById("testNumber").textContent =
+    "第" + currentTest + "回";
+}
+
+function skipQuestion(){
+
+  clearCanvas();
+
+  nextQuestion();
+}
+
+function nextTestSet(){
+
+  const maxTest = Math.ceil(words.length / 5);
+
+  if(currentTest < maxTest){
+
+    currentTest++;
+
+    correctCount = 0;
+
+    resetRemainingWords();
+
+    nextQuestion();
+  }
+}
+
+function prevTest(){
+
+  if(currentTest > 1){
+
+    currentTest--;
+
+    correctCount = 0;
+
+    resetRemainingWords();
+
+    nextQuestion();
+  }
+}
+
+/* =========================
+   OCR
+========================= */
+
+async function checkAnswer(){
+
+  const result =
+    document.getElementById("result");
+
+  result.textContent = "判定中...";
+
+  const tempCanvas =
+    document.createElement("canvas");
+
+  tempCanvas.width = canvas.width;
+  tempCanvas.height = canvas.height;
+
+  const tempCtx =
+    tempCanvas.getContext("2d");
+
+  tempCtx.fillStyle = "white";
+
+  tempCtx.fillRect(
+    0,
+    0,
+    tempCanvas.width,
+    tempCanvas.height
+  );
+
+  tempCtx.drawImage(canvas,0,0);
+
+  const data = tempCanvas.toDataURL();
+
+  const ocr =
+    await Tesseract.recognize(data,"eng");
+
+  let text = ocr.data.text
+    .toLowerCase()
+    .replace(/\n/g,"")
+    .replace(/\s+/g,"")
+    .replace(/[^a-z]/g,"");
+
+  let answer = currentWord.en
+    .toLowerCase()
+    .replace(/\s+/g,"")
+    .replace(/[^a-z]/g,"");
+
+  console.log("OCR:", text);
+  console.log("ANS:", answer);
+
+  if(text === answer){
+
+    result.textContent =
+      "正解！ " + text;
+
+    await playCorrectSound();
+
+    correctCount++;
+
+    if(correctCount >= 5){
+
+      document.getElementById("question").textContent =
+        "Good!!";
+
+      document.getElementById("result").textContent = "";
+
+      clearCanvas();
+
+      return;
+    }
+
+    clearCanvas();
+
+    nextQuestion();
+
+  }else{
+
+    result.textContent =
+      "不正解：" + text;
+
+    await playWrongSound();
+  }
+}
+
+/* start */
+
+loadWords();
+
+</script>
+
+</body>
+</html>
