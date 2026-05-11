@@ -1,152 +1,351 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
+
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>英単語テスト</title>
 
 <style>
+
 body{
-    font-family:sans-serif;
-    text-align:center;
-    margin-top:50px;
+  font-family:sans-serif;
+  text-align:center;
+}
+
+canvas{
+  border:1px solid black;
+  touch-action:none;
 }
 
 button{
-    font-size:24px;
-    padding:10px 20px;
-    margin:10px;
+  margin:5px;
+  padding:10px;
 }
 
-#word{
-    font-size:40px;
-    margin:30px;
-}
 </style>
+
 </head>
 
 <body>
 
 <h1>英単語テスト</h1>
 
-<div id="word">Press Start</div>
+<p id="testNumber"></p>
 
-<button id="startBtn">開始</button>
-<button id="nextBtn" style="display:none;">次へ</button>
+<h2 id="question"></h2>
+
+<canvas id="canvas" width="400" height="200"></canvas>
+
+<br><br>
+
+<button onclick="unlockAudio()">音声開始</button>
+
+<button onclick="clearCanvas()">消す</button>
+<button onclick="checkAnswer()">判定</button>
+<button onclick="skipQuestion()">次の問題へ</button>
+<button onclick="prevTest()">前のテスト</button>
+<button onclick="nextTestSet()">次のテスト</button>
+
+<p id="result"></p>
+
+<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
 
-const words = [
-    {
-        word: "apple",
-        audio: "apple.mp3"
-    },
-    {
-        word: "dog",
-        audio: "dog.mp3"
-    },
-    {
-        word: "book",
-        audio: "book.mp3"
-    }
-];
+let words = [];
+let currentTest = 1;
+let currentWord;
+let remainingWords = [];
+let correctCount = 0;
 
-let current = 0;
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-const wordDiv = document.getElementById("word");
-const startBtn = document.getElementById("startBtn");
-const nextBtn = document.getElementById("nextBtn");
+let drawing = false;
+
+ctx.lineWidth = 8;
+ctx.lineCap = "round";
+ctx.strokeStyle = "black";
+
+canvas.addEventListener("pointerdown", start);
+canvas.addEventListener("pointermove", draw);
+canvas.addEventListener("pointerup", end);
+
+function start(e){
+  drawing = true;
+  ctx.beginPath();
+  ctx.moveTo(e.offsetX, e.offsetY);
+}
+
+function draw(e){
+  if(!drawing) return;
+  ctx.lineTo(e.offsetX, e.offsetY);
+  ctx.stroke();
+}
+
+function end(){
+  drawing = false;
+}
+
+function clearCanvas(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
 
 /* =========================
-   iPad対応版 Audio
+   iPad対応音声
 ========================= */
 
-const audio = new Audio();
+const correctAudio = new Audio("correct.mp3");
+const wrongAudio = new Audio("wrong.mp3");
 
 /* 音声解放 */
-async function unlockAudio() {
+async function unlockAudio(){
 
-    try {
+  try{
 
-        audio.src = words[0].audio;
+    correctAudio.volume = 0;
 
-        audio.volume = 0;
+    await correctAudio.play();
 
-        await audio.play();
+    correctAudio.pause();
+    correctAudio.currentTime = 0;
 
-        audio.pause();
+    wrongAudio.volume = 0;
 
-        audio.currentTime = 0;
+    await wrongAudio.play();
 
-        audio.volume = 1;
+    wrongAudio.pause();
+    wrongAudio.currentTime = 0;
 
-        console.log("audio unlocked");
+    correctAudio.volume = 1;
+    wrongAudio.volume = 1;
 
-    } catch(e) {
+    document.getElementById("result").textContent = "音声ON";
 
-        console.log(e);
-    }
+  }catch(e){
+
+    console.log(e);
+
+    document.getElementById("result").textContent = "音声開始失敗";
+  }
 }
 
-/* 単語再生 */
-async function playCurrentWord() {
+/* 正解音 */
+async function playCorrectSound(){
 
-    wordDiv.textContent = words[current].word;
+  try{
 
-    try {
+    correctAudio.pause();
 
-        audio.pause();
+    correctAudio.currentTime = 0;
 
-        audio.src = words[current].audio;
+    await correctAudio.play();
 
-        audio.load();
+  }catch(e){
 
-        audio.currentTime = 0;
+    console.log(e);
+  }
+}
 
-        await audio.play();
+/* 不正解音 */
+async function playWrongSound(){
 
-    } catch(e) {
+  try{
 
-        console.log(e);
-    }
+    wrongAudio.pause();
+
+    wrongAudio.currentTime = 0;
+
+    await wrongAudio.play();
+
+  }catch(e){
+
+    console.log(e);
+  }
+}
+
+/* ========================= */
+
+async function loadWords(){
+
+  const response = await fetch("words.csv");
+  const text = await response.text();
+
+  const lines = text.trim().split("\n");
+
+  words = lines.map(line => {
+
+    const parts = line.split(",");
+
+    return {
+      en: parts[0].trim(),
+      ja: parts[1].trim()
+    };
+  });
+
+  correctCount = 0;
+
+  resetRemainingWords();
+
+  nextQuestion();
+}
+
+function getCurrentTestWords(){
+
+  const start = (currentTest - 1) * 5;
+  const end = start + 5;
+
+  return words.slice(start,end);
+}
+
+function resetRemainingWords(){
+
+  remainingWords = [...getCurrentTestWords()];
+}
+
+function nextQuestion(){
+
+  if(remainingWords.length === 0){
+
+    resetRemainingWords();
+  }
+
+  const index = Math.floor(Math.random() * remainingWords.length);
+
+  currentWord = remainingWords[index];
+
+  remainingWords.splice(index,1);
+
+  document.getElementById("question").textContent = currentWord.ja;
+
+  document.getElementById("testNumber").textContent =
+    "第" + currentTest + "回";
+}
+
+/* スキップ */
+
+function skipQuestion(){
+
+  clearCanvas();
+
+  nextQuestion();
+}
+
+/* 次テスト */
+
+function nextTestSet(){
+
+  const maxTest = Math.ceil(words.length / 5);
+
+  if(currentTest < maxTest){
+
+    currentTest++;
+
+    correctCount = 0;
+
+    resetRemainingWords();
+
+    nextQuestion();
+  }
+}
+
+/* 前テスト */
+
+function prevTest(){
+
+  if(currentTest > 1){
+
+    currentTest--;
+
+    correctCount = 0;
+
+    resetRemainingWords();
+
+    nextQuestion();
+  }
 }
 
 /* =========================
-   開始ボタン
+   OCR判定
 ========================= */
 
-startBtn.addEventListener("click", async () => {
+async function checkAnswer(){
 
-    await unlockAudio();
+  const result = document.getElementById("result");
 
-    startBtn.style.display = "none";
+  result.textContent = "判定中...";
 
-    nextBtn.style.display = "inline-block";
+  const tempCanvas = document.createElement("canvas");
 
-    current = 0;
+  tempCanvas.width = canvas.width;
+  tempCanvas.height = canvas.height;
 
-    await playCurrentWord();
-});
+  const tempCtx = tempCanvas.getContext("2d");
 
-/* =========================
-   次へボタン
-========================= */
+  /* 白背景 */
 
-nextBtn.addEventListener("click", async () => {
+  tempCtx.fillStyle = "white";
 
-    current++;
+  tempCtx.fillRect(0,0,tempCanvas.width,tempCanvas.height);
 
-    if(current >= words.length){
+  /* 手書き転送 */
 
-        wordDiv.textContent = "終了";
+  tempCtx.drawImage(canvas,0,0);
 
-        nextBtn.disabled = true;
+  const data = tempCanvas.toDataURL();
 
-        return;
+  const ocr = await Tesseract.recognize(data,"eng");
+
+  let text = ocr.data.text
+    .toLowerCase()
+    .replace(/\n/g,"")
+    .replace(/\s+/g,"")
+    .replace(/[^a-z]/g,"");
+
+  let answer = currentWord.en
+    .toLowerCase()
+    .replace(/\s+/g,"")
+    .replace(/[^a-z]/g,"");
+
+  console.log("OCR:", text);
+  console.log("ANS:", answer);
+
+  /* 判定 */
+
+  if(text === answer){
+
+    result.textContent = "正解！ " + text;
+
+    await playCorrectSound();
+
+    correctCount++;
+
+    if(correctCount >= 5){
+
+      document.getElementById("question").textContent = "Good!!";
+
+      document.getElementById("result").textContent = "";
+
+      clearCanvas();
+
+      return;
     }
 
-    await playCurrentWord();
-});
+    clearCanvas();
+
+    nextQuestion();
+
+  }else{
+
+    result.textContent = "不正解：" + text;
+
+    await playWrongSound();
+  }
+}
+
+/* start */
+
+loadWords();
 
 </script>
 
