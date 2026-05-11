@@ -32,7 +32,7 @@ button{
 
 <p id="testNumber"></p>
 
-<h2 id="question"></h2>
+<h2 id="question">読み込み中...</h2>
 
 <canvas id="canvas" width="400" height="200"></canvas>
 
@@ -52,89 +52,32 @@ button{
 
 <script>
 
-let words = [];
-let currentTest = 1;
-let currentWord;
-let remainingWords = [];
-let correctCount = 0;
-
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-
-let drawing = false;
-
-ctx.lineWidth = 8;
-ctx.lineCap = "round";
-ctx.strokeStyle = "black";
-
-canvas.addEventListener("pointerdown", start);
-canvas.addEventListener("pointermove", draw);
-canvas.addEventListener("pointerup", end);
-
-function start(e){
-  drawing = true;
-  ctx.beginPath();
-  ctx.moveTo(e.offsetX, e.offsetY);
-}
-
-function draw(e){
-  if(!drawing) return;
-  ctx.lineTo(e.offsetX, e.offsetY);
-  ctx.stroke();
-}
-
-function end(){
-  drawing = false;
-}
-
-function clearCanvas(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-}
-
 /* =========================
-   iPad対応音声
-========================= */
-
-/* =========================
-   iPad完全対応音声
+   音声（iPad安定版）
 ========================= */
 
 let audioUnlocked = false;
 
-const AudioContextClass =
-  window.AudioContext || window.webkitAudioContext;
-
-const audioContext = new AudioContextClass();
-
-let correctBuffer = null;
-let wrongBuffer = null;
-
-/* mp3読み込み */
-
-async function loadSound(url){
-
-  const response = await fetch(url);
-
-  const arrayBuffer = await response.arrayBuffer();
-
-  return await audioContext.decodeAudioData(arrayBuffer);
-}
-
-/* 音声開始 */
+const correctAudio = new Audio("correct.mp3");
+const wrongAudio = new Audio("wrong.mp3");
 
 async function unlockAudio(){
 
   try{
 
-    await audioContext.resume();
+    correctAudio.volume = 0;
+    wrongAudio.volume = 0;
 
-    if(!correctBuffer){
-      correctBuffer = await loadSound("correct.mp3");
-    }
+    await correctAudio.play();
+    correctAudio.pause();
+    correctAudio.currentTime = 0;
 
-    if(!wrongBuffer){
-      wrongBuffer = await loadSound("wrong.mp3");
-    }
+    await wrongAudio.play();
+    wrongAudio.pause();
+    wrongAudio.currentTime = 0;
+
+    correctAudio.volume = 1;
+    wrongAudio.volume = 1;
 
     audioUnlocked = true;
 
@@ -150,40 +93,34 @@ async function unlockAudio(){
   }
 }
 
-/* 再生共通 */
-
-function playBuffer(buffer){
+async function playCorrectSound(){
 
   if(!audioUnlocked) return;
 
-  const source = audioContext.createBufferSource();
+  try{
 
-  source.buffer = buffer;
+    correctAudio.pause();
 
-  source.connect(audioContext.destination);
+    correctAudio.currentTime = 0;
 
-  source.start(0);
+    await correctAudio.play();
+
+  }catch(e){
+
+    console.log(e);
+  }
 }
 
-/* 正解音 */
+async function playWrongSound(){
 
-function playCorrectSound(){
+  if(!audioUnlocked) return;
 
-  playBuffer(correctBuffer);
-}
-
-/* 不正解音 */
-
-function playWrongSound(){
-
-  playBuffer(wrongBuffer);
-}
   try{
 
     wrongAudio.pause();
 
     wrongAudio.currentTime = 0;
-console.log("wrong sound start");
+
     await wrongAudio.play();
 
   }catch(e){
@@ -192,35 +129,104 @@ console.log("wrong sound start");
   }
 }
 
-/* ========================= */
+/* =========================
+   単語
+========================= */
+
+let words = [];
+let currentTest = 1;
+let currentWord;
+let remainingWords = [];
+let correctCount = 0;
+
+/* =========================
+   Canvas
+========================= */
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let drawing = false;
+
+ctx.lineWidth = 8;
+ctx.lineCap = "round";
+ctx.strokeStyle = "black";
+
+canvas.addEventListener("pointerdown", start);
+canvas.addEventListener("pointermove", draw);
+canvas.addEventListener("pointerup", end);
+
+function start(e){
+
+  drawing = true;
+
+  ctx.beginPath();
+
+  ctx.moveTo(e.offsetX, e.offsetY);
+}
+
+function draw(e){
+
+  if(!drawing) return;
+
+  ctx.lineTo(e.offsetX, e.offsetY);
+
+  ctx.stroke();
+}
+
+function end(){
+
+  drawing = false;
+}
+
+function clearCanvas(){
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+/* =========================
+   単語読み込み
+========================= */
 
 async function loadWords(){
 
-  const response = await fetch("words.csv");
-  const text = await response.text();
+  try{
 
-  const lines = text.trim().split("\n");
+    const response = await fetch("words.csv");
 
-  words = lines.map(line => {
+    const text = await response.text();
 
-    const parts = line.split(",");
+    const lines = text.trim().split("\n");
 
-    return {
-      en: parts[0].trim(),
-      ja: parts[1].trim()
-    };
-  });
+    words = lines.map(line => {
 
-  correctCount = 0;
+      const parts = line.split(",");
 
-  resetRemainingWords();
+      return {
+        en: parts[0].trim(),
+        ja: parts[1].trim()
+      };
+    });
 
-  nextQuestion();
+    correctCount = 0;
+
+    resetRemainingWords();
+
+    nextQuestion();
+
+  }catch(e){
+
+    console.log(e);
+
+    document.getElementById("question").textContent =
+      "words.csv 読み込み失敗";
+  }
 }
 
 function getCurrentTestWords(){
 
   const start = (currentTest - 1) * 5;
+
   const end = start + 5;
 
   return words.slice(start,end);
@@ -238,19 +244,23 @@ function nextQuestion(){
     resetRemainingWords();
   }
 
-  const index = Math.floor(Math.random() * remainingWords.length);
+  const index =
+    Math.floor(Math.random() * remainingWords.length);
 
   currentWord = remainingWords[index];
 
   remainingWords.splice(index,1);
 
-  document.getElementById("question").textContent = currentWord.ja;
+  document.getElementById("question").textContent =
+    currentWord.ja;
 
   document.getElementById("testNumber").textContent =
     "第" + currentTest + "回";
 }
 
-/* スキップ */
+/* =========================
+   問題送り
+========================= */
 
 function skipQuestion(){
 
@@ -258,8 +268,6 @@ function skipQuestion(){
 
   nextQuestion();
 }
-
-/* 次テスト */
 
 function nextTestSet(){
 
@@ -276,8 +284,6 @@ function nextTestSet(){
     nextQuestion();
   }
 }
-
-/* 前テスト */
 
 function prevTest(){
 
@@ -303,26 +309,30 @@ async function checkAnswer(){
 
   result.textContent = "判定中...";
 
-  const tempCanvas = document.createElement("canvas");
+  const tempCanvas =
+    document.createElement("canvas");
 
   tempCanvas.width = canvas.width;
   tempCanvas.height = canvas.height;
 
-  const tempCtx = tempCanvas.getContext("2d");
-
-  /* 白背景 */
+  const tempCtx =
+    tempCanvas.getContext("2d");
 
   tempCtx.fillStyle = "white";
 
-  tempCtx.fillRect(0,0,tempCanvas.width,tempCanvas.height);
-
-  /* 手書き転送 */
+  tempCtx.fillRect(
+    0,
+    0,
+    tempCanvas.width,
+    tempCanvas.height
+  );
 
   tempCtx.drawImage(canvas,0,0);
 
   const data = tempCanvas.toDataURL();
 
-  const ocr = await Tesseract.recognize(data,"eng");
+  const ocr =
+    await Tesseract.recognize(data,"eng");
 
   let text = ocr.data.text
     .toLowerCase()
@@ -338,19 +348,19 @@ async function checkAnswer(){
   console.log("OCR:", text);
   console.log("ANS:", answer);
 
-  /* 判定 */
-
   if(text === answer){
 
-    result.textContent = "正解！ " + text;
+    result.textContent =
+      "正解！ " + text;
 
-    await playCorrectSound();
+    playCorrectSound();
 
     correctCount++;
 
     if(correctCount >= 5){
 
-      document.getElementById("question").textContent = "Good!!";
+      document.getElementById("question").textContent =
+        "Good!!";
 
       document.getElementById("result").textContent = "";
 
@@ -365,9 +375,10 @@ async function checkAnswer(){
 
   }else{
 
-    result.textContent = "不正解：" + text;
+    result.textContent =
+      "不正解：" + text;
 
-    await playWrongSound();
+    playWrongSound();
   }
 }
 
